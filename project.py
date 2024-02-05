@@ -110,12 +110,14 @@ Observamos que hay un ligero desvalance en el grupo A1 respecto a los otros dos.
 
 '''
 De nuestra inspección anterior sabemos que el evento con más acciones fue la pantalla de inicio y la que menos acciones tuvo, fue la del tutorial.
-Los demás eventos tienen un comportamiento similar y se relaciona al proceso de compra (producto -> carrito -> pago)
+Tenemos también la páigna de ofertas, la cual es la segunda más visitada, seguidas por la página del carro de compras y la pantalla de pago satisfacotrio.
+De estos eventos, solo los últimos dos pertenecen a una secuencia clara. Las secuencias po
 
 Veamos estos eventos, respecto a usuarios.
 '''
 
-print(data.groupby('event', as_index=False)['id'].nunique().sort_values(by='id', ascending=False))
+funnel = data.groupby('event', as_index=False)['id'].nunique().sort_values(by='id', ascending=False)
+print(funnel)
 
 '''
 Vemos que la proporción se conserva.
@@ -142,3 +144,5 @@ Tomando en cuenta que se registraron más de tres mil ventas, se espera que haya
 Ya habíamos observado que hay usuarios que tienen una actividad muy alta de la plataforma. Se calculó que al rededor del 5% de usuarios
 hacían más de 89 acciones.
 '''
+
+len(data[data['group'] == 'A1'])

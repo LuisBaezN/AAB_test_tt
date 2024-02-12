@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scipy.stats as st
 
 data = pd.read_csv('datasets/logs_exp_us.csv',sep='\t')
 
@@ -110,13 +111,23 @@ Observamos que hay un ligero desvalance en el grupo A1 respecto a los otros dos.
 
 '''
 De nuestra inspección anterior sabemos que el evento con más acciones fue la pantalla de inicio y la que menos acciones tuvo, fue la del tutorial.
-Tenemos también la páigna de ofertas, la cual es la segunda más visitada, seguidas por la página del carro de compras y la pantalla de pago satisfacotrio.
-De estos eventos, solo los últimos dos pertenecen a una secuencia clara. Las secuencias po
+Tenemos también la páigna de ofertas, la cual es la segunda más visitada, seguidas por la página del carro de compras y la pantalla de pago satisfactorio.
+De estos eventos, solo los últimos dos pertenecen a una secuencia clara. 
+
+Las posibles secuencias son las siguientes:
+
+                    |---> Cart Screen   ---> Payment Screen
+                    |           ^
+                    |           |
+    - Main Screen --|---> Offers Screen 
+                    |           ^
+                    |           |
+                    |--->   Tutorial 
 
 Veamos estos eventos, respecto a usuarios.
 '''
 
-funnel = data.groupby('event', as_index=False)['id'].nunique().sort_values(by='id', ascending=False)
+funnel = data.groupby('event', as_index=False)['id'].nunique().sort_values(by='id', ascending=False).reset_index(drop=True)
 print(funnel)
 
 '''
@@ -141,8 +152,68 @@ plt.show()
 Aquí podemos notar que la gran mayoría de los usuarios hizo solo una acción.
 
 Tomando en cuenta que se registraron más de tres mil ventas, se espera que haya usuarios que aportaron en gran medida a esta métrica.
-Ya habíamos observado que hay usuarios que tienen una actividad muy alta de la plataforma. Se calculó que al rededor del 5% de usuarios
-hacían más de 89 acciones.
+Ya habíamos observado que hay usuarios que tienen una actividad muy alta de la plataforma. Se calculó que al rededor de solo el 5% de 
+usuarios hacían más de 89 acciones.
+
+Del embudo sabemos que se pierden más usuarios desde la pantalla de inicio a la de ofertas o a la pantalla del carrito. Los porcentajes
+son los siguientes:
 '''
 
-len(data[data['group'] == 'A1'])
+for i in range(len(funnel) - 1):
+    print(f'> {(funnel['id'][i]/funnel['id'][0]*100):.2f}% of clients in : {funnel['event'][i]}')
+
+for i in range(len(funnel) - 2):
+    print(f'> {(1 - funnel['id'][i + 1]/funnel['id'][i])*100:.2f}% of clients lost from {funnel['event'][i]} to {funnel['event'][i + 1]}')
+
+'''
+Vemos que el 46.67% de los usuarios hace todo el viaje.
+'''
+
+## Results analisys
+
+'''
+Sabemos que el tamaño de los grupos es muy similar. Veamos de nuevo los datos:
+'''
+
+test_groups = {}
+
+for i in groups:
+    test_groups[i] = data[data['group'] == i]
+    print('\n> Users in group {0}: {1}'.format(i, test_groups[i]['id'].nunique()))
+    print('> Events in group {0}: {1}'.format(i, len(test_groups[i])))
+
+'''
+Eliminaremos los clientes atípicos en todos los grupos. Trataremos como clientes atípicos a aquellos que realizaron más de 89 acciones dentro
+de la plataforma.
+
+Identificamos a estos usuarios.
+'''
+
+for i in range(len(test_groups)):
+    print('> Group {0}, Before: {1}'.format(groups[i], len(test_groups[groups[i]])))
+    events_per_user = test_groups[groups[i]].groupby('id', as_index=False)['event'].count()['event']
+    threshold = events_per_user <= 89
+    outliers = test_groups[groups[i]].groupby('id', as_index=False)['event'].count()[~threshold]
+
+    test_groups[groups[i]] = test_groups[groups[i]][~test_groups[groups[i]]['id'].isin(outliers['id'])]
+    print('> Group {0}, After: {1}'.format(groups[i], len(test_groups[groups[i]])))
+
+'''
+Aplicado el filtro, el número de eventos es similar entre cada uno de los grupos.
+
+Veamos la proporción de usuarios.
+'''
+
+for i in groups:
+    print('\n> Users in group {0}: {1}'.format(i, test_groups[i]['id'].nunique()))
+
+'''
+La proporción de usuarios es sigue siendo similar, sin embargo, el grupo A1 sigue siendo el grupo que tiene menos usuarios.
+
+Veamos si hay una diferencia estadísticamente significativa en la proporción de las muestras entre el grupo A1 Y A2.
+'''
+
+test_groups['A1'].isna().sum()
+
+#len(test_groups[groups[0]]['id'].unique()) + len(test_groups[groups[1]]['id'].unique()) + len(test_groups[groups[2]]['id'].unique())
+#len(np.unique(np.concatenate((np.concatenate((test_groups[groups[0]]['id'].unique(), test_groups[groups[1]]['id'].unique())), test_groups[groups[2]]['id'].unique()))))

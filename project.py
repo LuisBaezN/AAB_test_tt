@@ -3,6 +3,53 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as st
 
+def two_mean_z(data_1: object, data_2: object, column: str, D_0: float = 0) -> float:
+    '''
+    Calculate the z score for mean comparision of two large populations
+    '''
+    d_0 = D_0
+    x_1 = data_1[column].mean()
+    x_2 = data_2[column].mean()
+    s_1 = data_1[column].std()
+    s_2 = data_2[column].std()
+    n_1 = len(data_1)
+    n_2 = len(data_2)
+
+    return ((x_1 - x_2) - d_0) / (np.sqrt(s_1**2/n_1 + s_2**2/n_2))
+
+def test_hyp(z_score: float, rejection_point: float, test_type: str = 't'):
+    '''
+    Verify the hypothesis with z-scores. The tests available is the two tail test.
+    '''
+    if test_type == 't':
+        if z_score < -rejection_point or z_score > rejection_point:
+            print('> The null hipothesis is rejected.')
+        else:
+            print('> The null hipothesis is accepted.')
+
+
+def name(dfs: list, group_names: list, row: str, category: str, group: str, alpha=0.01) -> None:
+    '''
+    Make a non-parametric test with the Mann Whintey method.
+
+    Info:
+    -----
+    Structure -> `test_groups['A1'][test_groups['A1']['event'] == 'MainScreenAppear'].groupby('id', as_index=False)['event'].count()['event']`
+    '''
+
+    results = st.mannwhitneyu(
+        dfs[group_names[0]][dfs[group_names[0]][row] == category].groupby(group, as_index=False)[row].count()[row],
+        dfs[group_names[1]][dfs[group_names[1]][row] == category].groupby(group, as_index=False)[row].count()[row]
+    )
+
+    if results.pvalue > alpha:
+        print('Both groups have no statistical difference')
+    else:
+        print('Both groups have statistical difference')
+
+    print('p-value: ', results.pvalue)
+
+
 data = pd.read_csv('datasets/logs_exp_us.csv',sep='\t')
 
 print(data.head(3))
@@ -208,12 +255,141 @@ for i in groups:
     print('\n> Users in group {0}: {1}'.format(i, test_groups[i]['id'].nunique()))
 
 '''
-La proporción de usuarios es sigue siendo similar, sin embargo, el grupo A1 sigue siendo el grupo que tiene menos usuarios.
+La proporción de usuarios sigue siendo similar, sin embargo, el grupo A1 permanece como el grupo que tiene menos usuarios.
 
-Veamos si hay una diferencia estadísticamente significativa en la proporción de las muestras entre el grupo A1 Y A2.
+Veamos si hay una diferencia estadísticamente significativa en la proporción de las muestras entre el grupo A1 Y A2. Para ello,
+verificaremos primero si nuestros grupos tienen una distribución normal usando una gráfica de probabilidad. un test de Shapiro-Wilk y uno de Anderson-Darling.
+'''
+print('='*20, 'A1 Case:', '='*20)
+st.probplot(test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'], dist="norm", plot=plt)
+plt.title('A1 probability distribution')
+plt.show()
+
+results = st.shapiro(test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'])
+print(results)
+if results.pvalue > 0.01:
+    print('Both groups are statisticaly equal')
+else:
+    print('Both groups are statisticaly different')
+print('Shapiro\'s p-value: ', results.pvalue)
+
+results = st.anderson(test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'])
+if results[0]:
+    print('Both groups are statisticaly equal')
+else:
+    print('Both groups are statisticaly different')
+
+print('='*20, 'A2 Case:', '='*20)
+
+st.probplot(test_groups['A2'].groupby('id', as_index=False)['event'].count()['event'], dist="norm", plot=plt)
+plt.title('A2 probability distribution')
+plt.show()
+
+results = st.shapiro(test_groups['A2'].groupby('id', as_index=False)['event'].count()['event'])
+if results.pvalue > 0.01:
+    print('Both groups are statisticaly equal')
+else:
+    print('Both groups are statisticaly different')
+print('Shapiro\'s p-value: ', results.pvalue)
+
+results = st.anderson(test_groups['A2'].groupby('id', as_index=False)['event'].count()['event'])
+if results[0]:
+    print('Both groups are statisticaly equal')
+else:
+    print('Both groups are statisticaly different')
+
+'''
+De acuerdo a los resultados, solo la prueba de Anderson indica que nuestros grupos sigen una distribución normal en ambos grupos. 
+
+Dados estos resultados, usaremos pruebas una prueba no paramétrica (Mann Whitney) para determinar si ambos grupos son estadísticamente diferentes.
 '''
 
-test_groups['A1'].isna().sum()
+results = st.mannwhitneyu(test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'], test_groups['A2'].groupby('id', as_index=False)['event'].count()['event'])
+
+print('p-value: ', results.pvalue)
+
+'''
+Nuestro p-value es muy alto, por lo que no hay una diferencia estadísticamente significativa entre estos dos grupos, en otras palabras, los factores que hacen visible una diferencia entre ambos grupos
+no afectará los análisis posteriores ya que es practicamente despreciable.
+
+Nos enfocaremos ahora en el evento más popular, tal evento corresponde a la página principal (´MainScreenAppear´) y verificaremos hay una diferencia estadísticamente significativa entre el grupo
+A1 y A2.
+'''
+
+name(test_groups, ['A1', 'A2'], 'event', 'MainScreenAppear', 'id')
+
+'''
+Dado a que el p-value tiene un valor alto, podemos aseverar que ambos grupos no tienen una diferencia estadísticamente significativa.
+
+Realizaremos la misma prueba para los eventos restantes.
+'''
+
+categories = ['OffersScreenAppear', 'CartScreenAppear', 'PaymentScreenSuccessful', 'Tutorial']
+
+for i in categories:
+    print('='*70)
+    print(f'\n>> For {i}:\n\n')
+    name(test_groups, ['A1', 'A2'], 'event', i, 'id')
+
+'''
+Para cada categoría no se encontró una diferencia significativa, por lo que los grupos quedaron divididos correctamente. Note que debido al número de eventos 
+solo la última categoría tiene un p-value más bajo que las demás, pero muy alejado de nuestro umbral de decisión.
+
+Compararemos ahora cada una de las categorías, con el grupo B. Comenzamos la comparación con el grupo A1
+'''
+
+categories = ['MainScreenAppear', 'OffersScreenAppear', 'CartScreenAppear', 'PaymentScreenSuccessful', 'Tutorial']
+
+for i in categories:
+    print('='*70)
+    print(f'\n>> For {i}:\n\n')
+    name(test_groups, ['A1', 'B'], 'event', i, 'id')
+
+'''
+Notamos que tampoco existe una diferencia significativa entre el grupo A1 y el B. De todas las categorias, solo la correspondiente a la página del carro de
+compras presenta un p-value bajo (0.033).
+
+Continuamos con la comparación, cambiando el grupo A1 por el A2.
+'''
+
+for i in categories:
+    print('='*70)
+    print(f'\n>> For {i}:\n\n')
+    name(test_groups, ['A2', 'B'], 'event', i, 'id')
+
+
+'''
+Nuevamente no se encuentra una diferencia significativa entre ambos grupos, a excepción del bajo valor del p-value correspondiente a la página del carro de compras
+
+Combinaremos el grupo A1 y el A2 para hacer una última prueba.
+'''
+
+test_groups['A'] = pd.concat([test_groups['A1'], test_groups['A2']])
+
+for i in categories:
+    print('='*70)
+    print(f'\n>> For {i}:\n\n')
+    name(test_groups, ['A', 'B'], 'event', i, 'id')
+
+'''
+Aunque los resultados obtenidos son muy parecidos a los resultados obtenidos con los grupos separados, los p-values se hicieron más pequeños en cada una de las 
+categorias. Para el caso de la página del carrito de compras bajó a 0.0102.
+
+De esta forma, podemos ver que el cambio de fuente en toda la página, aparentemente solo muestra un cambio de comportamiento en los clientes en la parte donde se
+muestra el carrito de compras.
+'''
 
 #len(test_groups[groups[0]]['id'].unique()) + len(test_groups[groups[1]]['id'].unique()) + len(test_groups[groups[2]]['id'].unique())
 #len(np.unique(np.concatenate((np.concatenate((test_groups[groups[0]]['id'].unique(), test_groups[groups[1]]['id'].unique())), test_groups[groups[2]]['id'].unique()))))
+
+test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'].hist()
+plt.show()
+
+
+
+rej_point = np.abs(st.norm.ppf(1 - 0.005))
+print('> Percent point', rej_point)
+
+z = two_mean_z(test_groups['A1'].groupby('id', as_index=False)['event'].count(), test_groups['A1'].groupby('id', as_index=False)['event'].count(), 'event')
+
+test_hyp(z, rej_point)

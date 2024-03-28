@@ -28,7 +28,7 @@ def test_hyp(z_score: float, rejection_point: float, test_type: str = 't'):
             print('> The null hipothesis is accepted.')
 
 
-def name(dfs: list, group_names: list, row: str, category: str, group: str, alpha=0.01) -> None:
+def name(dfs: list, group_names: list, row: str, category: str, group: str, alpha=0.01, simple: bool = True) -> None | float:
     '''
     Make a non-parametric test with the Mann Whintey method.
 
@@ -42,12 +42,16 @@ def name(dfs: list, group_names: list, row: str, category: str, group: str, alph
         dfs[group_names[1]][dfs[group_names[1]][row] == category].groupby(group, as_index=False)[row].count()[row]
     )
 
-    if results.pvalue > alpha:
-        print('Both groups have no statistical difference')
-    else:
-        print('Both groups have statistical difference')
+    if simple:
+        if results.pvalue > alpha:
+            print('Both groups have no statistical difference')
+        else:
+            print('Both groups have statistical difference')
 
-    print('p-value: ', results.pvalue)
+        print('p-value: ', results.pvalue)
+
+    else:
+        return results.pvalue
 
 
 data = pd.read_csv('datasets/logs_exp_us.csv',sep='\t')
@@ -375,17 +379,57 @@ for i in categories:
 Aunque los resultados obtenidos son muy parecidos a los resultados obtenidos con los grupos separados, los p-values se hicieron más pequeños en cada una de las 
 categorias. Para el caso de la página del carrito de compras bajó a 0.0102.
 
-De esta forma, podemos ver que el cambio de fuente en toda la página, aparentemente solo muestra un cambio de comportamiento en los clientes en la parte donde se
+De esta forma, podemos ver que el cambio de fuente en toda la página, aparentemente solo presenta un cambio de comportamiento en los clientes en la parte donde se
 muestra el carrito de compras.
+
+Según la corrección de Bonferroni, sabemos que:
+
+FWER = 1 - (1 - alpha)^k
+
+Donde:
+alpha: 0.01 (nivel de significación)
+k: 10 (número de pruebas)
+
+Note que de las 15 pruebas hechas, tomamos en cuenta 10, ya que las últimas 5 toman los mismos datos de las primeras 10. Planteados los datos que usaremos
+calculemos el probabilidad de obtener al menos un falso positivo:
 '''
+
+alpha = 0.05
+k = 10
+
+fwer = 1 - (1 - alpha)**k
+
+print(f'> False positive probability: {fwer * 100}%')
+
+'''
+Tenemos cerca del 10% de obtener un 10% de obtener un falso positivo, dado que no obtuvimos ninguna prueba positiva con el actual nivel de significancia
+esta probabilidad es consistente con los resultados de mnuestras pruebas.
+
+Sabemos sin embargo, que hay una etapa que tiene dos resultados que se encuentran muy cerca de nuestro nivel de significancia, por lo que si subimos el 
+nivel de alpha a 0.05 estas pruebas se considerarán como positivas pero con una probabilidad de al rededor del 40% de que al menos uno de los resultados 
+sea un falso positivo 
+'''
+
+# FDR alternative if you have multiples positive results and you want to minimize the false positives and false negatives, also, if you have a limited sample size. The effect(s) of interest are not very large/consistent
+
+groups = ['A1', 'A2']
+p_values = []
+
+for g in groups:
+    for c in categories:
+        p_values.append(name(test_groups, [g, 'B'], 'event', c, 'id', simple=False))
+
+st.false_discovery_control(p_values)
+
+df_tmp = pd.DataFrame(p_values).sort_values(by=0).reset_index(drop=True)
+df_tmp * len(df_tmp) / pd.DataFrame([i + 1 for i in range(10)])
+
+pd.DataFrame(p_values).sort_values(by=0)
 
 #len(test_groups[groups[0]]['id'].unique()) + len(test_groups[groups[1]]['id'].unique()) + len(test_groups[groups[2]]['id'].unique())
 #len(np.unique(np.concatenate((np.concatenate((test_groups[groups[0]]['id'].unique(), test_groups[groups[1]]['id'].unique())), test_groups[groups[2]]['id'].unique()))))
 
-test_groups['A1'].groupby('id', as_index=False)['event'].count()['event'].hist()
-plt.show()
-
-
+#### LEARN ABOUT IFDR!!
 
 rej_point = np.abs(st.norm.ppf(1 - 0.005))
 print('> Percent point', rej_point)
